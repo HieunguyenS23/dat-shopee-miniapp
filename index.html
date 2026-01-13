@@ -11,8 +11,14 @@
     .card{background:#fff;border-radius:14px;padding:14px;margin:10px 0;box-shadow:0 1px 8px rgba(0,0,0,.06)}
     label{display:block;margin:10px 0 6px;font-weight:600}
     select,input,textarea{width:100%;padding:11px;border-radius:12px;border:1px solid #ddd;box-sizing:border-box}
-    .btn{position:sticky;bottom:12px;width:100%;padding:12px 14px;border:0;border-radius:12px;background:#ff6a00;color:#fff;font-weight:800}
-    .muted{color:#666;font-size:13px}
+    .btn{
+      position:sticky;bottom:12px;width:100%;
+      padding:12px 14px;border:0;border-radius:12px;
+      background:#ff6a00;color:#fff;font-weight:800;cursor:pointer;
+    }
+    .btn:disabled{opacity:.6;cursor:not-allowed}
+    .muted{color:#666;font-size:13px;margin-top:10px;white-space:pre-wrap}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   </style>
 </head>
 <body>
@@ -22,22 +28,29 @@
   <div class="wrap">
     <div class="card">
       <label>Chọn voucher</label>
-      <select id="voucher"></select>
+      <select id="voucher">
+        <option>Đang tải voucher...</option>
+      </select>
 
       <label>Link sản phẩm Shopee</label>
-      <input id="link_sp" placeholder="Dán link Shopee..."/>
+      <input id="link_sp" placeholder="Dán link Shopee..." />
 
       <label>Tên sản phẩm</label>
-      <input id="ten_sp" placeholder="Ví dụ: Áo thun"/>
+      <input id="ten_sp" placeholder="Ví dụ: Áo thun" />
 
-      <label>Phân loại</label>
-      <input id="phan_loai" placeholder="Ví dụ: Trắng L"/>
-
-      <label>Số lượng</label>
-      <input id="so_luong" type="number" min="1" value="1"/>
+      <div class="row">
+        <div>
+          <label>Phân loại</label>
+          <input id="phan_loai" placeholder="Ví dụ: Trắng L" />
+        </div>
+        <div>
+          <label>Số lượng</label>
+          <input id="so_luong" type="number" min="1" value="1" />
+        </div>
+      </div>
 
       <label>SĐT</label>
-      <input id="sdt" placeholder="09xxxx..."/>
+      <input id="sdt" placeholder="09xxxx..." />
 
       <label>Địa chỉ</label>
       <textarea id="dia_chi" rows="3" placeholder="Số nhà, phường/xã, quận/huyện, tỉnh/thành..."></textarea>
@@ -53,73 +66,106 @@
 
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script>
-    // URL Web App Apps Script của bạn
+    // ✅ URL Web App Apps Script của bạn
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbykYov_lmv2FZuLeKswUjj1g6jxCSs-nyUIr5nwwI6slBxwcjA_4BbRcqD2c9XyD5dB/exec";
 
     const tg = window.Telegram?.WebApp;
     const tgUser = tg?.initDataUnsafe?.user;
-    const telegram_id = tgUser?.id || "";
+    const telegram_id = tgUser?.id || "";     // sẽ có khi mở trong Telegram
     const username = tgUser?.username || "";
 
     const voucherEl = document.getElementById("voucher");
-    const msg = document.getElementById("msg");
+    const msgEl = document.getElementById("msg");
+    const btn = document.getElementById("submitBtn");
 
-    async function loadVouchers(){
-      const res = await fetch(SCRIPT_URL + "?vouchers=1");
-      const data = await res.json();
-      voucherEl.innerHTML = "";
-      (data.vouchers || []).forEach(v=>{
-        const opt = document.createElement("option");
-        opt.value = v.id;
-        opt.textContent = `${v.ten} - ${Number(v.gia_ban).toLocaleString("vi-VN")}đ`;
-        opt.dataset.gia = v.gia_ban;
-        voucherEl.appendChild(opt);
-      });
+    function setMsg(text){ msgEl.textContent = text || ""; }
+    function setLoading(isLoading){
+      btn.disabled = !!isLoading;
+      btn.textContent = isLoading ? "ĐANG GỬI..." : "GỬI ĐƠN HÀNG";
     }
 
-   async function submit(){
-  msg.textContent = "Đang gửi...";
+    async function loadVouchers(){
+      try{
+        setMsg("Đang tải voucher...");
+        const res = await fetch(SCRIPT_URL + "?vouchers=1&t=" + Date.now(), { method:"GET" });
+        const text = await res.text();
+        const data = JSON.parse(text);
 
-  const selected = voucherEl.options[voucherEl.selectedIndex];
+        voucherEl.innerHTML = "";
+        (data.vouchers || []).forEach(v=>{
+          const opt = document.createElement("option");
+          opt.value = v.id;
+          opt.textContent = `${v.ten} - ${Number(v.gia_ban).toLocaleString("vi-VN")}đ`;
+          opt.dataset.gia = v.gia_ban;
+          voucherEl.appendChild(opt);
+        });
 
-  const payload = {
-    type: "ORDER",
-    telegram_id,
-    username,
-    voucher_id: voucherEl.value,
-    voucher_gia: Number(selected?.dataset?.gia || 0),
-    link_sp: document.getElementById("link_sp").value.trim(),
-    ten_sp: document.getElementById("ten_sp").value.trim(),
-    phan_loai: document.getElementById("phan_loai").value.trim(),
-    so_luong: Number(document.getElementById("so_luong").value || 1),
-    sdt: document.getElementById("sdt").value.trim(),
-    dia_chi: document.getElementById("dia_chi").value.trim(),
-    note: document.getElementById("note").value.trim()
-  };
+        if (!data.vouchers || data.vouchers.length === 0){
+          setMsg("⚠️ Không có voucher trạng thái ON trong sheet VOUCHER.");
+        } else {
+          setMsg("");
+        }
+      }catch(e){
+        setMsg("❌ Lỗi tải voucher: " + (e.message || e));
+      }
+    }
 
-  try{
-    const formBody = new URLSearchParams();
-    formBody.set("payload", JSON.stringify(payload));
+    function buildPayload(){
+      const selected = voucherEl.options[voucherEl.selectedIndex];
+      return {
+        type: "ORDER",
+        telegram_id, // nếu mở ngoài Telegram sẽ rỗng
+        username,
+        voucher_id: voucherEl.value,
+        voucher_gia: Number(selected?.dataset?.gia || 0),
+        link_sp: document.getElementById("link_sp").value.trim(),
+        ten_sp: document.getElementById("ten_sp").value.trim(),
+        phan_loai: document.getElementById("phan_loai").value.trim(),
+        so_luong: Number(document.getElementById("so_luong").value || 1),
+        sdt: document.getElementById("sdt").value.trim(),
+        dia_chi: document.getElementById("dia_chi").value.trim(),
+        note: document.getElementById("note").value.trim()
+      };
+    }
 
-    // thêm cache-bust để tránh Telegram/GitHub cache
-    const url = SCRIPT_URL + "?t=" + Date.now();
+    async function submit(){
+      setLoading(true);
+      setMsg("Đang gửi...");
 
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
-      body: formBody.toString()
-    });
+      try{
+        const payload = buildPayload();
 
-    const text = await res.text();
-    let data;
-    try { data = JSON.parse(text); }
-    catch { throw new Error("API không trả JSON: " + text.slice(0,120)); }
+        // ✅ Gửi dạng form-urlencoded để né CORS preflight
+        const formBody = new URLSearchParams();
+        formBody.set("payload", JSON.stringify(payload));
 
-    msg.textContent = data.ok ? "✅ Đã gửi đơn. Chờ admin
+        const url = SCRIPT_URL + "?t=" + Date.now(); // cache-bust
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+          body: formBody.toString()
+        });
 
+        const text = await res.text();
+        let data;
+        try { data = JSON.parse(text); }
+        catch { throw new Error("API không trả JSON. Nội dung: " + text.slice(0,120)); }
 
-    document.getElementById("submitBtn").addEventListener("click", submit);
-    loadVouchers().catch(e=> msg.textContent = "❌ Không tải được voucher: " + e);
+        if (data.ok){
+          setMsg("✅ Đã gửi đơn. Chờ admin xử lý.");
+          if (tg) tg.showAlert("Đã gửi đơn. Chờ admin xử lý.");
+        } else {
+          setMsg("❌ Lỗi: " + (data.error || "Không gửi được"));
+        }
+      } catch(e){
+        setMsg("❌ Lỗi gửi đơn: " + (e.message || e));
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    btn.addEventListener("click", submit);
+    loadVouchers();
   </script>
 
 </body>

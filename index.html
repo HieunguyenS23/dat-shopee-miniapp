@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Form thông tin đơn</title>
+  <style>
+    body{font-family:system-ui;margin:0;background:#f6f6f6}
+    .top{background:#ff6a00;color:#fff;padding:14px 16px;font-weight:800}
+    .wrap{max-width:480px;margin:0 auto;padding:12px}
+    .card{background:#fff;border-radius:14px;padding:14px;margin:10px 0;box-shadow:0 1px 8px rgba(0,0,0,.06)}
+    label{display:block;margin:10px 0 6px;font-weight:600}
+    select,input,textarea{width:100%;padding:11px;border-radius:12px;border:1px solid #ddd;box-sizing:border-box}
+    .btn{position:sticky;bottom:12px;width:100%;padding:12px 14px;border:0;border-radius:12px;background:#ff6a00;color:#fff;font-weight:800}
+    .muted{color:#666;font-size:13px}
+  </style>
+</head>
+<body>
+
+  <div class="top">Form thông tin đơn</div>
+
+  <div class="wrap">
+    <div class="card">
+      <label>Chọn voucher</label>
+      <select id="voucher"></select>
+
+      <label>Link sản phẩm Shopee</label>
+      <input id="link_sp" placeholder="Dán link Shopee..."/>
+
+      <label>Tên sản phẩm</label>
+      <input id="ten_sp" placeholder="Ví dụ: Áo thun"/>
+
+      <label>Phân loại</label>
+      <input id="phan_loai" placeholder="Ví dụ: Trắng L"/>
+
+      <label>Số lượng</label>
+      <input id="so_luong" type="number" min="1" value="1"/>
+
+      <label>SĐT</label>
+      <input id="sdt" placeholder="09xxxx..."/>
+
+      <label>Địa chỉ</label>
+      <textarea id="dia_chi" rows="3" placeholder="Số nhà, phường/xã, quận/huyện, tỉnh/thành..."></textarea>
+
+      <label>Ghi chú</label>
+      <textarea id="note" rows="2" placeholder="(tuỳ chọn)"></textarea>
+
+      <div class="muted" id="msg"></div>
+    </div>
+
+    <button class="btn" id="submitBtn">GỬI ĐƠN HÀNG</button>
+  </div>
+
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script>
+    // URL Web App Apps Script của bạn
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbykYov_lmv2FZuLeKswUjj1g6jxCSs-nyUIr5nwwI6slBxwcjA_4BbRcqD2c9XyD5dB/exec";
+
+    const tg = window.Telegram?.WebApp;
+    const tgUser = tg?.initDataUnsafe?.user;
+    const telegram_id = tgUser?.id || "";
+    const username = tgUser?.username || "";
+
+    const voucherEl = document.getElementById("voucher");
+    const msg = document.getElementById("msg");
+
+    async function loadVouchers(){
+      const res = await fetch(SCRIPT_URL + "?vouchers=1");
+      const data = await res.json();
+      voucherEl.innerHTML = "";
+      (data.vouchers || []).forEach(v=>{
+        const opt = document.createElement("option");
+        opt.value = v.id;
+        opt.textContent = `${v.ten} - ${Number(v.gia_ban).toLocaleString("vi-VN")}đ`;
+        opt.dataset.gia = v.gia_ban;
+        voucherEl.appendChild(opt);
+      });
+    }
+
+    async function submit(){
+      msg.textContent = "Đang gửi...";
+      const selected = voucherEl.options[voucherEl.selectedIndex];
+
+      const payload = {
+        type: "ORDER",
+        telegram_id,
+        username,
+        voucher_id: voucherEl.value,
+        voucher_gia: Number(selected?.dataset?.gia || 0),
+        link_sp: document.getElementById("link_sp").value.trim(),
+        ten_sp: document.getElementById("ten_sp").value.trim(),
+        phan_loai: document.getElementById("phan_loai").value.trim(),
+        so_luong: Number(document.getElementById("so_luong").value || 1),
+        sdt: document.getElementById("sdt").value.trim(),
+        dia_chi: document.getElementById("dia_chi").value.trim(),
+        note: document.getElementById("note").value.trim()
+      };
+
+      const res = await fetch(SCRIPT_URL, {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json().catch(()=>({ok:false}));
+      msg.textContent = data.ok
+        ? "✅ Đã gửi đơn. Chờ admin xử lý."
+        : ("❌ Lỗi: " + (data.error || "Không gửi được"));
+
+      if (tg && data.ok) tg.showAlert("Đã gửi đơn. Chờ admin xử lý.");
+    }
+
+    document.getElementById("submitBtn").addEventListener("click", submit);
+    loadVouchers().catch(e=> msg.textContent = "❌ Không tải được voucher: " + e);
+  </script>
+
+</body>
+</html>

@@ -77,37 +77,46 @@
       });
     }
 
-    async function submit(){
-      msg.textContent = "Đang gửi...";
-      const selected = voucherEl.options[voucherEl.selectedIndex];
+   async function submit(){
+  msg.textContent = "Đang gửi...";
 
-      const payload = {
-        type: "ORDER",
-        telegram_id,
-        username,
-        voucher_id: voucherEl.value,
-        voucher_gia: Number(selected?.dataset?.gia || 0),
-        link_sp: document.getElementById("link_sp").value.trim(),
-        ten_sp: document.getElementById("ten_sp").value.trim(),
-        phan_loai: document.getElementById("phan_loai").value.trim(),
-        so_luong: Number(document.getElementById("so_luong").value || 1),
-        sdt: document.getElementById("sdt").value.trim(),
-        dia_chi: document.getElementById("dia_chi").value.trim(),
-        note: document.getElementById("note").value.trim()
-      };
+  const selected = voucherEl.options[voucherEl.selectedIndex];
 
-      const res = await fetch(SCRIPT_URL, {
-  method: "POST",
-  headers: { "Content-Type": "text/plain;charset=utf-8" },
-  body: JSON.stringify(payload)
-});
-      const data = await res.json().catch(()=>({ok:false}));
-      msg.textContent = data.ok
-        ? "✅ Đã gửi đơn. Chờ admin xử lý."
-        : ("❌ Lỗi: " + (data.error || "Không gửi được"));
+  const payload = {
+    type: "ORDER",
+    telegram_id,
+    username,
+    voucher_id: voucherEl.value,
+    voucher_gia: Number(selected?.dataset?.gia || 0),
+    link_sp: document.getElementById("link_sp").value.trim(),
+    ten_sp: document.getElementById("ten_sp").value.trim(),
+    phan_loai: document.getElementById("phan_loai").value.trim(),
+    so_luong: Number(document.getElementById("so_luong").value || 1),
+    sdt: document.getElementById("sdt").value.trim(),
+    dia_chi: document.getElementById("dia_chi").value.trim(),
+    note: document.getElementById("note").value.trim()
+  };
 
-      if (tg && data.ok) tg.showAlert("Đã gửi đơn. Chờ admin xử lý.");
-    }
+  try{
+    const formBody = new URLSearchParams();
+    formBody.set("payload", JSON.stringify(payload));
+
+    // thêm cache-bust để tránh Telegram/GitHub cache
+    const url = SCRIPT_URL + "?t=" + Date.now();
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+      body: formBody.toString()
+    });
+
+    const text = await res.text();
+    let data;
+    try { data = JSON.parse(text); }
+    catch { throw new Error("API không trả JSON: " + text.slice(0,120)); }
+
+    msg.textContent = data.ok ? "✅ Đã gửi đơn. Chờ admin
+
 
     document.getElementById("submitBtn").addEventListener("click", submit);
     loadVouchers().catch(e=> msg.textContent = "❌ Không tải được voucher: " + e);
